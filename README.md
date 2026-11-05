@@ -122,6 +122,13 @@ Linux では、`libxkbcommon`・`wayland`・`libxcb` の開発用パッケージ
 | `presets`、`templates` | プリセット例、スクリプトのテンプレート例 |
 | `docs` | 仕様書（要件定義・基本設計・画面設計）、受け入れテスト、開発ガイド、プリセットの書き方 |
 
+## 新しい版・不具合の報告
+
+- 新しい版は [Releases](https://github.com/babaken/SmartConverter/releases) に置きます。GitHub の［Watch］→［Custom］→［Releases］で、出たときに通知を受けられます。アプリから更新を確かめることはしません（ネットワークにはつなぎません）。
+- 不具合の報告・要望・質問は [Issues](https://github.com/babaken/SmartConverter/issues) にお願いします。OS、SmartConverter の版、使ったプリセット（コマンド）、操作ログ（設定ファイルと同じフォルダの `Log/SmartConverter.log`）があると助かります。
+- 個人で作っているので、返事は 1 週間以内を目安にしますが、直す時期は約束できません。
+- PR は、誤字・ドキュメント・数行の修正などの小さなものを受け付けます。大きな変更は、先に Issue で相談してください。このリポジトリにはリリースした版だけを置いているため、PR は直接マージせず、内容を取り込んで次のリリースで反映します（作者として記録し、リリースノートでも紹介します）。
+
 ## ライセンス
 
 MIT License と Apache License 2.0 のデュアルライセンスです（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。

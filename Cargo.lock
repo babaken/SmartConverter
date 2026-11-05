@@ -3913,7 +3913,7 @@ dependencies = [
 
 [[package]]
 name = "sc-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3928,7 +3928,7 @@ dependencies = [
 
 [[package]]
 name = "sc-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "dirs",
@@ -3942,7 +3942,7 @@ dependencies = [
 
 [[package]]
 name = "sc-gui"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5788,9 +5788,10 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
+ "encoding_rs",
  "flate2",
  "ico",
  "resvg",

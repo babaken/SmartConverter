@@ -2,7 +2,8 @@
 //!
 //! 指定したリビジョン（既定は `HEAD`）のファイルを `git archive` で取り出し、
 //! `public/public.json` の設定に従って、内部向けのファイルを除き、文書を公開用に書き換えて出力先に書き出す。
-//! 最後に、内部向けの記述・個人のパス・メールアドレス・切れたリンクが残っていないかを確かめる。
+//! 最後に、内部向けの記述・個人のパス・メールアドレス・切れたリンクと、
+//! 開発者のプリセット（`private_presets` のフォルダの INI）のタイトルやコマンドが残っていないかを確かめる。
 //!
 //! 設定と公開用の文書は `public/` に置く（`public/` 自体は公開リポジトリに入れない）。
 
@@ -40,9 +41,14 @@ enum Rule {
 
 #[derive(Debug)]
 struct Config {
+    /// 除くファイル。`/` で終わるものはフォルダ（その下のファイルをすべて除く）。
     exclude: Vec<String>,
     markers: Vec<String>,
     rules: Vec<(String, Vec<Rule>)>,
+    /// 開発者のプリセットを置くフォルダ（`/` で終わる）。ここの INI のタイトルとコマンドの行を検査語にする。
+    private_presets: Option<String>,
+    /// 検査語のうち、公開側にも正当に出てくるので検査しないもの。
+    allow: Vec<String>,
 }
 
 pub fn run(args: &[String]) -> Result<()> {
@@ -76,7 +82,7 @@ pub fn run(args: &[String]) -> Result<()> {
     let files = read_archive(&workspace_root(), &rev)?;
     let total = files.len();
     let public = build(files)?;
-    let problems = check(&public.files, &public.markers);
+    let problems = check(&public.files, &public.markers, &public.preset_terms);
     if !problems.is_empty() {
         for p in &problems {
             eprintln!("  {p}");
@@ -153,6 +159,8 @@ fn read_archive(root: &Path, rev: &str) -> Result<Files> {
 struct Public {
     files: Files,
     markers: Vec<String>,
+    /// 開発者のプリセットから作った検査語（例外を除いたもの）。
+    preset_terms: Vec<String>,
     excluded: Vec<String>,
     changed: Vec<String>,
 }
@@ -173,9 +181,21 @@ fn build(mut files: Files) -> Result<Public> {
         .collect();
     files.retain(|p, _| !p.starts_with(CONFIG_DIR));
 
+    // 除く前に、開発者のプリセットから検査語を作る。
+    let preset_terms = match &config.private_presets {
+        Some(dir) => preset_terms(&files, dir, &config.allow)?,
+        None => Vec::new(),
+    };
+
     // 名前が変わって除き損ねることがないよう、無いものはエラーにする。
     for p in &config.exclude {
-        if files.remove(p).is_none() {
+        if let Some(dir) = p.strip_suffix('/') {
+            let before = files.len();
+            files.retain(|k, _| !k.starts_with(&format!("{dir}/")));
+            if files.len() == before {
+                bail!("除くフォルダ {p} にファイルがありません（{CONFIG_FILE} を直してください）");
+            }
+        } else if files.remove(p).is_none() {
             bail!("除くファイル {p} がありません（{CONFIG_FILE} を直してください）");
         }
     }
@@ -194,9 +214,58 @@ fn build(mut files: Files) -> Result<Public> {
     Ok(Public {
         files,
         markers: config.markers,
+        preset_terms,
         excluded: config.exclude,
         changed,
     })
+}
+
+/// `dir` の INI の `Title=`（`[Info]` の Title も含む）と `CommandN=` の値を、検査語にする。
+/// `allow` の語は除く。`allow` にあるのに検査語に無いもの（古くなった例外）はエラーにする。
+fn preset_terms(files: &Files, dir: &str, allow: &[String]) -> Result<Vec<String>> {
+    let mut terms = std::collections::BTreeSet::new();
+    let mut found = false;
+    for (path, e) in files.range(dir.to_string()..) {
+        if !path.starts_with(dir) {
+            break;
+        }
+        if !path.to_ascii_lowercase().ends_with(".ini") {
+            continue;
+        }
+        found = true;
+        for line in decode_ini(&e.data).lines() {
+            let line = line.trim();
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            let key = key.trim();
+            let is_command = key
+                .strip_prefix("Command")
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+            let value = value.trim();
+            if (key == "Title" || is_command) && !value.is_empty() {
+                terms.insert(value.to_string());
+            }
+        }
+    }
+    if !found {
+        bail!("開発者のプリセットのフォルダ {dir} に INI がありません（{CONFIG_FILE} を直してください）");
+    }
+    for a in allow {
+        if !terms.remove(a) {
+            bail!("例外の語「{a}」は開発者のプリセットにありません（{CONFIG_FILE} の allow から消してください）");
+        }
+    }
+    Ok(terms.into_iter().collect())
+}
+
+/// INI を文字列にする（UTF-8 か、そうでなければ Shift-JIS（CP932））。
+fn decode_ini(data: &[u8]) -> String {
+    let data = data.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(data);
+    match std::str::from_utf8(data) {
+        Ok(s) => s.to_string(),
+        Err(_) => encoding_rs::SHIFT_JIS.decode(data).0.into_owned(),
+    }
 }
 
 fn text_of(files: &Files, path: &str) -> Result<String> {
@@ -255,10 +324,32 @@ fn parse_config(text: &str) -> Result<Config> {
         }
         rules.push((path.clone(), parsed));
     }
+    let private_presets = match v.get("private_presets") {
+        None => None,
+        Some(p) => {
+            let p = p.as_str().with_context(|| {
+                format!("{CONFIG_FILE} の private_presets は文字列にしてください")
+            })?;
+            if !p.ends_with('/') {
+                bail!("{CONFIG_FILE} の private_presets はフォルダなので / で終えてください: {p}");
+            }
+            Some(p.to_string())
+        }
+    };
+    let allow = if v.get("allow").is_some() {
+        strings("allow")?
+    } else {
+        Vec::new()
+    };
+    if !allow.is_empty() && private_presets.is_none() {
+        bail!("{CONFIG_FILE} の allow は private_presets といっしょに使ってください");
+    }
     Ok(Config {
         exclude: strings("exclude")?,
         markers: strings("markers")?,
         rules,
+        private_presets,
+        allow,
     })
 }
 
@@ -348,7 +439,7 @@ fn drop_column(text: &str, name: &str) -> Result<String> {
 }
 
 /// 公開してはいけない記述を探す。見つかったものを「パス:行: 内容」で返す。
-fn check(files: &Files, markers: &[String]) -> Vec<String> {
+fn check(files: &Files, markers: &[String], preset_terms: &[String]) -> Vec<String> {
     let mut problems = Vec::new();
     for (path, e) in files {
         let data = &e.data;
@@ -356,6 +447,19 @@ fn check(files: &Files, markers: &[String]) -> Vec<String> {
         for m in markers {
             for pos in find_all(data, m.as_bytes()) {
                 problems.push(format!("{path}:{}: 内部向けの記述「{m}」", line_of(pos)));
+            }
+        }
+        // 開発者のプリセットの語。Shift-JIS のファイルにも掛かるよう、読める形にしてから探す。
+        if !preset_terms.is_empty() {
+            let text = decode_ini(data);
+            let tline = |pos: usize| text[..pos].matches('\n').count() + 1;
+            for t in preset_terms {
+                for (pos, _) in text.match_indices(t.as_str()) {
+                    problems.push(format!(
+                        "{path}:{}: 開発者のプリセットの語「{t}」",
+                        tline(pos)
+                    ));
+                }
             }
         }
         // 例として書く `C:\Users\<名前>` と `C:\Users\…` は許す
@@ -536,7 +640,78 @@ mod tests {
             text_of(&p.files, "docs/tests.md").unwrap(),
             "# テスト\n\n| ID | 手順 |\n|---|---|\n| A-01 | 起動する |\n\n| 実施日 | 結果 |\n|---|---|\n| 1/1 | OK |\n"
         );
-        assert!(check(&p.files, &p.markers).is_empty());
+        assert!(check(&p.files, &p.markers, &p.preset_terms).is_empty());
+    }
+
+    const PRESET_CONFIG: &str = r###"{
+        "exclude": ["dev/", "docs/dig/"],
+        "markers": [],
+        "rules": {},
+        "private_presets": "dev/presets/",
+        "allow": ["Opus 96kbps"]
+    }"###;
+
+    fn preset_sample() -> Files {
+        let mut f = files(&[
+            ("public/public.json", PRESET_CONFIG),
+            (
+                "dev/presets/mine.ini",
+                "[Info]\r\nTitle=私の設定\r\n; Title=コメントは数えない\r\n[Item0]\r\nTitle=Opus 96kbps\r\nCommand0=\"enc\" -secret \"<%InputFile%>\"\r\nCommand1=\r\n",
+            ),
+            ("docs/dig/a.md", "私の設定\n"),
+            ("docs/dig/b.md", "x\n"),
+            ("README.md", "音だけ Opus 96kbps\n"),
+        ]);
+        // Shift-JIS のプリセット（タイトル「改　設定」）
+        f.insert(
+            "dev/presets/old.ini".into(),
+            Entry {
+                data: b"[Item0]\r\nTitle=\x89\xfc\x81\x40\x90\xdd\x92\xe8\r\n".to_vec(),
+                executable: false,
+            },
+        );
+        f
+    }
+
+    #[test]
+    fn checks_words_from_private_presets() {
+        let p = build(preset_sample()).unwrap();
+        // フォルダ単位で除く。
+        assert_eq!(p.files.keys().collect::<Vec<_>>(), ["README.md"]);
+        // タイトル（Info も）、コマンドの行全体、Shift-JIS のタイトル。コメント・空のコマンド・例外は入らない。
+        assert_eq!(
+            p.preset_terms,
+            ["\"enc\" -secret \"<%InputFile%>\"", "改　設定", "私の設定"]
+        );
+        // 例外の語は、公開側に正当に出てきても止めない。
+        assert!(check(&p.files, &p.markers, &p.preset_terms).is_empty());
+
+        let mut f = files(&[("a.md", "例：私の設定\n"), ("b.ini", "")]);
+        f.get_mut("b.ini").unwrap().data = b"Title=\x89\xfc\x81\x40\x90\xdd\x92\xe8\r\n".to_vec();
+        let problems = check(&f, &[], &p.preset_terms);
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(problems[0].starts_with("a.md:1: 開発者のプリセットの語「私の設定」"));
+        assert!(problems[1].starts_with("b.ini:1: 開発者のプリセットの語「改　設定」"));
+    }
+
+    #[test]
+    fn private_preset_settings_that_no_longer_match_are_errors() {
+        // 古くなった例外。
+        let mut f = preset_sample();
+        f.insert(
+            "public/public.json".into(),
+            files(&[("x", &PRESET_CONFIG.replace("Opus 96kbps", "無い名前"))])["x"].clone(),
+        );
+        assert!(build(f).is_err());
+        // プリセットのフォルダに INI が無い。
+        let mut f = preset_sample();
+        f.retain(|k, _| !k.starts_with("dev/"));
+        f.insert("dev/x.txt".into(), files(&[("x", "")])["x"].clone());
+        assert!(build(f).is_err());
+        // 除くフォルダが空。
+        let mut f = preset_sample();
+        f.retain(|k, _| !k.starts_with("docs/dig/"));
+        assert!(build(f).is_err());
     }
 
     #[test]
@@ -570,7 +745,7 @@ mod tests {
             at = '@'
         )
         .into_bytes();
-        let problems = check(&f, &["INTERNAL".into()]);
+        let problems = check(&f, &["INTERNAL".into()], &[]);
         assert_eq!(problems.len(), 4, "{problems:?}");
         assert!(problems[0].starts_with("a.md:1: 内部向けの記述"));
         assert!(problems[1].starts_with("a.md:3: リンク先 missing.md"));
