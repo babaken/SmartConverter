@@ -1,0 +1,43 @@
+[package]
+name = "sc-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "SmartConverter"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.6.7", features = ["derive"] }
+eframe = "0.37.0"
+egui_extras = "0.37.0"
+notify-rust = "4.18.2"
+rfd = "0.17.2"
+sc-core = { version = "1.0.0", path = "../sc-core" }
+
+[build-dependencies]
+winresource = "0.1.34"
+
+[target."cfg(windows)".dependencies]
+tray-icon = "0.26.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# StatusNotifierItem のトレイ（GTK を使わない。D-Bus は zbus で扱う）
+ksni = { version = "0.3.7", default-features = false, features = ["blocking", "async-io"], optional = true }
+# X11（XWayland）でウィンドウを開くため（eframe と同じ版。Wayland ではファイルのドロップを受け取れない）
+winit = { version = "0.30.13", default-features = false, features = ["x11"] }
+# SIGTERM・SIGHUP で終わるときに、変換中のツールを止める
+ctrlc = { version = "3.5.2", features = ["termination"] }
+
+[features]
+default = ["tray"]
+# Linux のトレイ（Windows では常に有効）
+tray = ["dep:ksni"]
+
+[dev-dependencies]
+egui_kittest = "0.37.0"

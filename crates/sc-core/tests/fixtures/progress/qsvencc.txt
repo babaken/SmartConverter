@@ -1,0 +1,41 @@
+--------------------------------------------------------------------------------
+out.hevc
+--------------------------------------------------------------------------------
+backend=qsv
+--tune is disabled for 10bit HEVC FF encoding on this GPU to avoid image corruption.
+videoPrm.mfx.MaxKbps value changed 15000 -> 500 by driver
+cop.SingleSeiNalUnit value changed off -> auto by driver
+QSVEncC (x64) 8.35 (r4715) by rigaya, Oct 23 2026 12:09:17 (VC 1944/Win)
+OS             Windows 11 x64 [UTF-8]
+CPU Info       Intel Core (detail omitted)
+GPU Info       Intel UHD Graphics (detail omitted)
+Media SDK      QuickSyncVideo API v2.15, FF, 1st(i) GPU
+Async Depth    3 frames
+Hyper Mode     off
+Buffer Memory  d3d11, 47 work buffer
+Input Info     avqsv: MPEG2, 1280x720, 30000/1001 fps
+VPP            ColorFmtConvertion: nv12 -> p010
+               Resize 1280x720 -> 640x480
+AVSync         vfr
+Output         H.265/HEVC(yuv420 10bit) main10 @ Level 3
+               640x480p 1:1 29.970fps (30000/1001fps)
+Target usage   4 - balanced
+Encode Mode    Bitrate Mode - CBR
+Bitrate        500 kbps
+Max Bitrate    500 kbps
+VBV Bufsize    1000 kb
+QP Limit       min: 22, max: 63
+Ref frames     3 frames
+Bframes        3 frames, B-pyramid: on
+Max GOP Length 300 frames
+Ext. Features  WeightP WeightB GPB tskip ctu:64 sao:all 
+MFXDEC: DecodeFrameAsync: removing 49877 bytes from input bitstream not read by decoder.
+[9.7%] 684 frames: 1404.52 fps, 495 kbps, remain 0:00:04, GPU 86%, VD 85%, est out size 13.9MB[21.2%] 1780 frames: 1381.99 fps, 493 kbps, remain 0:00:04, GPU 80%, VD 79%, est out size 16.5MB[32.7%] 2879 frames: 1378.17 fps, 495 kbps, remain 0:00:04, GPU 80%, VD 80%, est out size 17.3MB[44.1%] 3978 frames: 1376.95 fps, 499 kbps, remain 0:00:03, GPU 80%, VD 79%, est out size 17.9MB[55.4%] 5063 frames: 1372.46 fps, 499 kbps, remain 0:00:02, GPU 80%, VD 79%, est out size 18.1MB[67.1%] 6175 frames: 1375.28 fps, 499 kbps, remain 0:00:02, GPU 80%, VD 80%, est out size 18.3MB[78.4%] 7276 frames: 1375.43 fps, 499 kbps, remain 0:00:01, GPU 80%, VD 79%, est out size 18.4MB[89.9%] 8367 frames: 1373.89 fps, 499 kbps, remain 0:00:00, GPU 80%, VD 80%, est out size 18.5MB                                                                               
+encoded 8979 frames, 1372.52 fps, 499.30 kbps, 17.83 MB
+encode time 0:00:06, CPU: 6.9%, GPU: 80.8%, VD: 80.1%
+frame type IDR   30
+frame type I     60,  total size  0.62 MB
+frame type P   2245,  total size  9.73 MB
+frame type B   6704,  total size  7.79 MB
+
+

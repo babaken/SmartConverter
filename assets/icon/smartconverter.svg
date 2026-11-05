@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- SmartConverter icon: 動画フィルム → スマートフォンへ転送 -->
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+
+  <!-- フィルム -->
+  <rect x="12" y="76" width="88" height="104" rx="10" fill="#1f2937" stroke="#4b5563" stroke-width="3"/>
+  <g fill="#e5e7eb">
+    <rect x="19" y="86" width="8" height="9" rx="2"/>
+    <rect x="19" y="104" width="8" height="9" rx="2"/>
+    <rect x="19" y="122" width="8" height="9" rx="2"/>
+    <rect x="19" y="140" width="8" height="9" rx="2"/>
+    <rect x="19" y="158" width="8" height="9" rx="2"/>
+    <rect x="85" y="86" width="8" height="9" rx="2"/>
+    <rect x="85" y="104" width="8" height="9" rx="2"/>
+    <rect x="85" y="122" width="8" height="9" rx="2"/>
+    <rect x="85" y="140" width="8" height="9" rx="2"/>
+    <rect x="85" y="158" width="8" height="9" rx="2"/>
+  </g>
+  <rect x="33" y="88" width="46" height="80" rx="4" fill="url(#frame)"/>
+  <path d="M48 112 L48 144 L70 128 Z" fill="#ffffff"/>
+
+  <!-- スマートフォン -->
+  <rect x="160" y="36" width="80" height="184" rx="16" fill="#111827" stroke="#4b5563" stroke-width="3"/>
+  <rect x="167" y="54" width="66" height="140" rx="6" fill="url(#screen)"/>
+  <rect x="188" y="43" width="24" height="4" rx="2" fill="#4b5563"/>
+  <circle cx="200" cy="207" r="6" fill="#4b5563"/>
+  <path d="M190 108 L190 148 L218 128 Z" fill="#ffffff"/>
+
+  <!-- 転送の矢印（白い縁取りで明暗どちらの背景でも見える） -->
+  <path d="M92 116 H128 V98 L164 128 L128 158 V140 H92 Z"
+        fill="url(#arrow)" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke"/>
+</svg>

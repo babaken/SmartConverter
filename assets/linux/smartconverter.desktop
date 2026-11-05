@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=SmartConverter
+GenericName=Video Converter
+GenericName[ja]=動画変換
+Comment=Convert videos for smartphones with presets
+Comment[ja]=プリセットを使って動画をスマートフォン向けに変換します
+Exec=SmartConverter %F
+Icon=smartconverter
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=video;convert;encode;ffmpeg;
+Keywords[ja]=動画;変換;エンコード;ffmpeg;
+MimeType=video/mp2t;video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;video/x-ms-wmv;video/x-flv;audio/mpeg;audio/x-wav;audio/flac;
+StartupNotify=true
+StartupWMClass=smartconverter
+Actions=x11;
+
+# Wayland ではドラッグ＆ドロップを受け取れない（winit 0.30 の制限）ので、使いたいときは X11（XWayland）で開く
+[Desktop Action x11]
+Name=Start with X11 (drag and drop)
+Name[ja]=X11 で起動（ドラッグ＆ドロップを使う）
+Exec=env SMARTCONVERTER_X11=1 SmartConverter %F

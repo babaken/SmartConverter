@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.ttf binary
+*.otf binary
+# 本家互換のテストデータ（Shift-JIS / CRLF）はバイト列のまま保持する
+**/tests/fixtures/** -text

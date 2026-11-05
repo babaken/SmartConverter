@@ -1,0 +1,31 @@
+ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16.2.0 (Rev3, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
+  libavutil      61.  1.102 / 61.  1.102
+  libavcodec     63.  1.102 / 63.  1.102
+  libavformat    63.  1.102 / 63.  1.102
+  libavdevice    63.  1.102 / 63.  1.102
+  libavfilter    12.  1.102 / 12.  1.102
+  libswscale     10.  1.102 / 10.  1.102
+  libswresample   7.  1.102 /  7.  1.102
+Input #0, mpegts, from 'sample.ts':
+  Duration: 00:05:00.01, start: 1.423344, bitrate: 4350 kb/s
+  Program 1 
+    Metadata:
+      service_name    : Service01
+      service_provider: FFmpeg
+  Stream #0:0[0x100]: Video: mpeg2video (Main) ([2][0][0][0] / 0x0002), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], 29.97 fps, 29.97 tbr, 90k tbn, start 1.433367
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 1130496 vbv_delay: N/A
+  Stream #0:1[0x101]: Audio: mp2 (mp3float) ([3][0][0][0] / 0x0003), 48000 Hz, mono, fltp, 192 kb/s, start 1.423344
+Stream mapping:
+  Stream #0:1 -> #0:0 (mp2 (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, wav, to 'audio.wav':
+  Metadata:
+    ISFT            : Lavf63.1.102
+  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 48000 Hz, stereo, s16, 1536 kb/s
+    Metadata:
+      encoder         : Lavc63.1.102 pcm_s16le
+[out#0/wav @ 0000020319436f80] video:0KiB audio:56250KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.000135%
+size=   56250KiB time=00:05:00.00 bitrate=1536.0kbits/s speed=2.25e+03x elapsed=0:00:00.13    

@@ -1,0 +1,21 @@
+[package]
+name = "sc-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+dirs = "7.0.0"
+encoding_rs = "0.8.44"
+regex = "1.13.1"
+shell-words = "1.1.1"
+thiserror = "2.0.21"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Registry", "Win32_System_Threading", "Win32_Security"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.191"

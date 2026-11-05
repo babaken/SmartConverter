@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- SmartConverter icon（16〜32px 用の簡略版）: 矢印 → スマートフォン -->
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect x="132" y="16" width="112" height="224" rx="22" fill="#111827" stroke="#4b5563" stroke-width="6"/>
+  <rect x="144" y="40" width="88" height="176" rx="8" fill="url(#screen)"/>
+  <path d="M170 98 L170 158 L212 128 Z" fill="#ffffff"/>
+  <path d="M12 104 H82 V68 L150 128 L82 188 V152 H12 Z"
+        fill="url(#arrow)" stroke="#ffffff" stroke-width="12" stroke-linejoin="round" paint-order="stroke"/>
+</svg>
