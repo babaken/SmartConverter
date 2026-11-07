@@ -314,7 +314,14 @@ impl OptionsView {
                 for kind in [ScriptKind::AviSynth, ScriptKind::VapourSynth] {
                     ui.label(kind.name());
                     match env.scripts.get(kind) {
-                        Some(p) => ui.label(format!("✓ {}", p.display())),
+                        // ✓ とパスを 1 つの文字列にすると、間の空白で先に改行されて ✓ だけが 1 行目に残る。
+                        Some(p) => {
+                            ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                                ui.label("✓");
+                                path_label(ui, egui::RichText::new(p.display().to_string()));
+                            })
+                            .response
+                        }
                         None => ui.colored_label(
                             ui.visuals().warn_fg_color,
                             "✗ 見つかりません（この種類のテンプレートは使いません）",
@@ -340,10 +347,8 @@ impl OptionsView {
                 ui.strong("");
                 ui.end_row();
                 for (i, t) in d.script_templates.iter_mut().enumerate() {
-                    ui.add(egui::TextEdit::singleline(&mut t.ext).desired_width(60.0))
-                        .labelled_by(ext_label.id);
-                    ui.add(egui::TextEdit::singleline(&mut t.template).desired_width(300.0))
-                        .labelled_by(template_label.id);
+                    sized_input(ui, &mut t.ext, 60.0).labelled_by(ext_label.id);
+                    sized_input(ui, &mut t.template, 300.0).labelled_by(template_label.id);
                     template_status(ui, &t.template, env);
                     if ui.button("参照").clicked() {
                         if let Some(p) = rfd::FileDialog::new()
@@ -387,8 +392,7 @@ impl OptionsView {
             .show(ui, |ui| {
                 for (name, path) in d.tools.iter_mut() {
                     let name_label = ui.monospace(name);
-                    ui.add(egui::TextEdit::singleline(path).desired_width(300.0))
-                        .labelled_by(name_label.id);
+                    sized_input(ui, path, 300.0).labelled_by(name_label.id);
                     if ui.button("参照").clicked() {
                         if let Some(p) = rfd::FileDialog::new().pick_file() {
                             *path = p.display().to_string();
@@ -446,7 +450,7 @@ impl OptionsView {
                                 egui::Color32::from_rgb(0x16, 0xa3, 0x4a),
                                 format!("✓ {}", t.name),
                             );
-                            ui.weak(p.display().to_string());
+                            path_label(ui, egui::RichText::new(p.display().to_string()).weak());
                         }
                         None => {
                             ui.colored_label(
@@ -530,6 +534,21 @@ impl OptionsView {
 }
 
 /// テンプレート 1 行分の種類と状態（ファイルがあるか、その種類が使えるか）。
+/// 表（Grid）の中に、幅 `width` の 1 行の入力欄を置く。
+/// `desired_width` だけだと、Grid が前の描画の列の幅（最初は最小の 40）を使い、その幅に縮まったまま広がらない。
+fn sized_input(ui: &mut egui::Ui, text: &mut String, width: f32) -> egui::Response {
+    let height = ui.spacing().interact_size.y;
+    ui.add_sized([width, height], egui::TextEdit::singleline(text))
+}
+
+/// パスを表示する。長ければ画面の幅で折り返して、最後まで出す（選んでコピーもできる）。
+/// 表（Grid）の中の文字は既定では折り返さないので、そのままだと長いパスが画面の中身の幅を広げ、
+/// あとに並べる説明文が画面の外にはみ出す（AT-UI-03、150% で見つかった）。
+/// 省略（…）にしなかったのは、パスを読んだりコピーしたりして使うことがあるため。
+fn path_label(ui: &mut egui::Ui, text: egui::RichText) -> egui::Response {
+    ui.add(egui::Label::new(text).wrap_mode(egui::TextWrapMode::Wrap))
+}
+
 fn template_status(ui: &mut egui::Ui, template: &str, env: &OptionsEnv<'_>) {
     let path = script::template_path(template.trim(), env.app_dir);
     let kind = ScriptKind::from_path(&path);
@@ -644,6 +663,36 @@ mod ui_tests {
     }
 
     #[test]
+    fn long_paths_wrap_inside_the_window() {
+        // 日本語のフォルダ名のパスと、空白も日本語もない英数字だけのパス。
+        let ja = format!(
+            "C:/{}/vapoursynth/vapoursynth.dll",
+            "深いフォルダ/".repeat(30)
+        );
+        let ascii = format!("C:/{}/bin/ffmpeg.exe", "very_long_folder_name".repeat(12));
+        let mut h = harness(Settings::default());
+        h.state_mut().scripts.vapoursynth = Some(PathBuf::from(&ja));
+        h.state_mut().tools[0].path = Some(PathBuf::from(&ascii));
+        let width = 720.0;
+        let fits = |h: &Harness<'_, State>, text: &str| {
+            let r = h.get_by_label_contains(text).rect();
+            assert!(r.max.x <= width, "{text} が画面の外にはみ出した: {r:?}");
+            r
+        };
+
+        click(&mut h, "スクリプト");
+        fits(&h, "入力の拡張子にテンプレート");
+        fits(&h, "テンプレートは相対パスなら");
+        // 省略せず、折り返して最後まで出す（2 行以上になる）。
+        let r = fits(&h, "vapoursynth/vapoursynth.dll");
+        assert!(r.height() > 30.0, "パスが折り返されていない: {r:?}");
+
+        click(&mut h, "ツール");
+        let r = fits(&h, "bin/ffmpeg.exe");
+        assert!(r.height() > 30.0, "パスが折り返されていない: {r:?}");
+    }
+
+    #[test]
     fn delete_partial_checkbox() {
         let label = "中断したとき、途中までの出力ファイルを消す";
         // 既定は ON。外して OK すると OFF で返る
@@ -658,6 +707,44 @@ mod ui_tests {
         click(&mut h, label);
         click(&mut h, "OK");
         assert!(applied(&h).0.delete_partial);
+    }
+
+    #[test]
+    fn inputs_in_tables_have_their_width() {
+        // 表（Grid）の中の入力欄が、列の最小の幅（40）に縮まっていないこと（150% の確認で見つかった）。
+        let mut s = Settings::default();
+        s.tools
+            .insert("ffmpeg".into(), "D:/tools/ffmpeg.exe".into());
+        let mut h = harness(s);
+        let width = |h: &Harness<'_, State>, label: &str| h.get_by_label(label).rect().width();
+
+        click(&mut h, "ツール");
+        assert!(
+            width(&h, "ffmpeg") >= 290.0,
+            "ツールのパス: {}",
+            width(&h, "ffmpeg")
+        );
+
+        click(&mut h, "スクリプト");
+        click(&mut h, "追加");
+        h.run();
+        assert!(
+            width(&h, "拡張子") >= 55.0,
+            "拡張子: {}",
+            width(&h, "拡張子")
+        );
+        assert!(
+            width(&h, "テンプレート") >= 290.0,
+            "テンプレート: {}",
+            width(&h, "テンプレート")
+        );
+
+        click(&mut h, "詳細");
+        assert!(
+            width(&h, "プリセットファイル") >= 290.0,
+            "プリセットファイル: {}",
+            width(&h, "プリセットファイル")
+        );
     }
 
     #[test]
@@ -767,8 +854,10 @@ mod ui_tests {
     fn script_detection_is_shown() {
         let mut h = harness(Settings::default());
         click(&mut h, "スクリプト");
+        // ✓ とパスは別のラベル（パスだけを折り返すため）
+        assert!(h.query_by_label("✓").is_some());
         assert!(h
-            .query_by_label("✓ C:/Windows/System32/AviSynth.dll")
+            .query_by_label("C:/Windows/System32/AviSynth.dll")
             .is_some());
         assert!(h.query_by_label_contains("✗ 見つかりません").is_some());
         click(&mut h, "追加");

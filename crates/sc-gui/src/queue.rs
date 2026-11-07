@@ -202,8 +202,9 @@ impl Queue {
         }
     }
 
-    /// 選択中の、終わったジョブを待機に戻す。
-    pub fn retry_selected(&mut self) {
+    /// 選択中の、終わったジョブを待機に戻す。戻した数を返す。
+    pub fn retry_selected(&mut self) -> usize {
+        let mut n = 0;
         for j in self
             .jobs
             .iter_mut()
@@ -211,8 +212,10 @@ impl Queue {
         {
             if j.state.is_finished() {
                 reset(j);
+                n += 1;
             }
         }
+        n
     }
 
     /// 選択中の待機ジョブを動かす（`delta` が負なら上へ）。
@@ -332,6 +335,23 @@ mod tests {
         assert_eq!(q.finished_text(), "完了 2 / 中断 1 / 失敗 2");
         q.jobs[1].state = JobState::Succeeded;
         assert_eq!(q.finished_text(), "完了 3 / 失敗 2");
+    }
+
+    #[test]
+    fn retry_returns_finished_jobs_to_pending() {
+        let mut q = queue(4);
+        q.jobs[0].state = JobState::Succeeded;
+        q.jobs[1].state = JobState::Failed;
+        q.jobs[1].message = Some("失敗".into());
+        q.jobs[2].state = JobState::Running;
+        q.selected = [1, 2, 3, 4].into();
+        // 完了・失敗は戻す。実行中・待機中はそのまま。
+        assert_eq!(q.retry_selected(), 2);
+        assert_eq!(q.jobs[0].state, JobState::Pending);
+        assert_eq!(q.jobs[1].state, JobState::Pending);
+        assert_eq!(q.jobs[1].message, None);
+        assert_eq!(q.jobs[2].state, JobState::Running);
+        assert_eq!(q.retry_selected(), 0);
     }
 
     #[test]

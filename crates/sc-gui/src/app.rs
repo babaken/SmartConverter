@@ -1176,7 +1176,8 @@ impl App {
             self.select(id, mods);
         }
         if let Some(a) = action {
-            self.do_row_action(a);
+            let ctx = ui.ctx().clone();
+            self.do_row_action(a, &ctx);
         }
     }
 
@@ -1201,11 +1202,17 @@ impl App {
         self.anchor = Some(id);
     }
 
-    fn do_row_action(&mut self, action: RowAction) {
+    fn do_row_action(&mut self, action: RowAction, ctx: &egui::Context) {
         crate::diag::op(format!("行の操作：{}", action.name()));
         match action {
             RowAction::SetPreset(t) => self.queue.set_preset_for_selected(&t),
-            RowAction::Retry => self.queue.retry_selected(),
+            RowAction::Retry => {
+                // 「追加したら自動で始める」がオンなら、ファイルを追加したときと同じく、すぐに始める。
+                if self.queue.retry_selected() > 0 && self.settings.auto_start_on_add {
+                    self.stopped = false;
+                    self.try_start_next(ctx);
+                }
+            }
             RowAction::Move(m) => self.queue.move_selected(m),
             RowAction::Remove => {
                 self.queue.remove_selected();
