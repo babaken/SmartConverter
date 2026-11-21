@@ -8,13 +8,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use sc_core::plan::{self, PlanOptions};
 use sc_core::preset::Preset;
 use sc_core::progress::ProgressUpdate;
 use sc_core::runner::{self, JobOutcome, RunOptions, RunnerEvent};
 use sc_core::script::{ScriptOptions, ScriptSupport};
 use sc_core::settings::Settings;
+
+use crate::bars::Bars;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// 終了コード（要件 F-CL-11）。
@@ -24,8 +25,6 @@ pub const EXIT_ABORTED: u8 = 130;
 
 /// 端末でないときに進捗を出す間隔。
 const PLAIN_INTERVAL: Duration = Duration::from_secs(10);
-/// プログレスバーの目盛り（進捗率 × これ）。
-const BAR_SCALE: u64 = 1000;
 /// ファイル名の表示幅の上限（全角は 2 桁）。
 const NAME_WIDTH: usize = 40;
 
@@ -163,78 +162,32 @@ impl Convert<'_> {
 
 /// 進捗の表示（端末ならプログレスバー、そうでなければ 10 秒ごとの 1 行）。
 struct Ui {
-    multi: Option<MultiProgress>,
-    overall: Option<ProgressBar>,
-    bar: Option<ProgressBar>,
+    bars: Option<Bars>,
     quiet: bool,
     verbose: bool,
     total: usize,
     last_plain: Instant,
     cmd: (usize, usize, String),
-    determinate: bool,
 }
 
 impl Ui {
     fn new(fancy: bool, quiet: bool, verbose: bool, total: usize) -> Self {
-        let multi = fancy.then(|| MultiProgress::with_draw_target(ProgressDrawTarget::stderr()));
-        let overall = match (&multi, total > 1) {
-            (Some(m), true) => {
-                let pb = m.add(ProgressBar::new(total as u64));
-                pb.set_style(
-                    ProgressStyle::with_template(
-                        "全体 [{pos}/{len}] {bar:24.cyan/blue} {percent:>3}%  経過 {elapsed_precise}",
-                    )
-                    .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏ "),
-                );
-                Some(pb)
-            }
-            _ => None,
-        };
         Self {
-            multi,
-            overall,
-            bar: None,
+            bars: fancy.then(|| Bars::new(total)),
             quiet,
             verbose,
             total,
             last_plain: Instant::now(),
             cmd: (0, 0, String::new()),
-            determinate: false,
         }
     }
 
     fn start_job(&mut self, _index: usize, name: &str) {
         self.cmd = (0, 0, String::new());
-        self.determinate = false;
         self.last_plain = Instant::now();
-        if let Some(m) = &self.multi {
-            let pb = m.add(ProgressBar::new(BAR_SCALE));
-            pb.set_prefix(name.to_owned());
-            self.set_spinner(&pb);
-            self.bar = Some(pb);
+        if let Some(b) = &self.bars {
+            b.start_job(name);
         }
-    }
-
-    fn set_spinner(&self, pb: &ProgressBar) {
-        pb.set_style(
-            ProgressStyle::with_template("{prefix}\n     {spinner:.cyan} {wide_msg}").unwrap(),
-        );
-        pb.enable_steady_tick(Duration::from_millis(120));
-    }
-
-    fn set_determinate(&mut self) {
-        if let Some(pb) = &self.bar {
-            pb.disable_steady_tick();
-            pb.set_style(
-                ProgressStyle::with_template(
-                    "{prefix}\n     [{bar:30.cyan/blue}] {percent:>3}%  {wide_msg}",
-                )
-                .unwrap()
-                .progress_chars("█▉▊▋▌▍▎▏ "),
-            );
-        }
-        self.determinate = true;
     }
 
     fn event(&mut self, index: usize, name: &str, event: &RunnerEvent) {
@@ -246,38 +199,18 @@ impl Ui {
                 ..
             } => {
                 self.cmd = (*i + 1, *count, tool.clone());
-                if let Some(pb) = &self.bar {
-                    pb.set_prefix(format!("{name}  コマンド {}/{count} {tool}", i + 1));
-                    pb.set_position(0);
-                    pb.set_message(String::new());
-                }
-                if self.determinate {
-                    // 次のコマンドは進捗が分かるとは限らない
-                    if let Some(pb) = self.bar.clone() {
-                        self.set_spinner(&pb);
-                    }
-                    self.determinate = false;
+                // 次のコマンドは進捗が分かるとは限らないので、スピナーに戻る
+                if let Some(b) = &self.bars {
+                    b.set_prefix(format!("{name}  コマンド {}/{count} {tool}", i + 1));
                 }
             }
             RunnerEvent::Progress {
                 update, elapsed, ..
             } => {
                 let msg = progress_message(update, *elapsed);
-                if let Some(r) = update.ratio {
-                    if !self.determinate {
-                        self.set_determinate();
-                    }
-                    if let Some(pb) = &self.bar {
-                        pb.set_position((r as f64 * BAR_SCALE as f64) as u64);
-                    }
-                }
-                if let Some(pb) = &self.bar {
-                    pb.set_message(msg.clone());
-                }
-                if self.multi.is_none()
-                    && !self.quiet
-                    && self.last_plain.elapsed() >= PLAIN_INTERVAL
-                {
+                if let Some(b) = &self.bars {
+                    b.set_progress(update.ratio, msg);
+                } else if !self.quiet && self.last_plain.elapsed() >= PLAIN_INTERVAL {
                     self.last_plain = Instant::now();
                     let percent = update
                         .ratio
@@ -302,36 +235,28 @@ impl Ui {
     }
 
     fn print_err(&self, line: &str) {
-        match &self.multi {
-            Some(m) => {
-                let _ = m.println(line);
-            }
+        match &self.bars {
+            Some(b) => b.println(line, false),
             None => eprintln!("{line}"),
         }
     }
 
     fn finish_job(&mut self) {
-        if let Some(pb) = self.bar.take() {
-            pb.finish_and_clear();
-            if let Some(m) = &self.multi {
-                m.remove(&pb);
-            }
-        }
-        if let Some(o) = &self.overall {
-            o.inc(1);
+        if let Some(b) = &self.bars {
+            b.finish_job();
         }
     }
 
     fn result(&self, line: &str) {
-        match &self.multi {
-            Some(m) => m.suspend(|| println!("{line}")),
+        match &self.bars {
+            Some(b) => b.println(line, true),
             None => println!("{line}"),
         }
     }
 
-    fn done(&self) {
-        if let Some(o) = &self.overall {
-            o.finish_and_clear();
+    fn done(&mut self) {
+        if let Some(b) = self.bars.take() {
+            b.finish();
         }
     }
 }

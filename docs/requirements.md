@@ -268,7 +268,7 @@ SmartConverter は、その中核機能を **Rust で再実装** し、次を実
 ## 8. 想定構成（参考）
 
 - GUI：`egui` / `eframe`（決定）
-- INI：自前パーサ（本家互換の挙動を正確に再現するため）＋ `encoding_rs`
+- INI：自前パーサ（本家互換の挙動を正確に再現するため）＋自前の CP932 変換（表はビルド時に `encoding_rs` から作る）
 - コマンドの引数分割：`shell-words`（Linux）
 - ファイル監視：`notify`
 - 通知・トレイ：`notify-rust`、`tray-icon`

@@ -5,7 +5,7 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use regex::Regex;
+use regex_lite::Regex;
 
 /// 解析結果。分からない項目は `None`。
 #[derive(Debug, Clone, Default, PartialEq)]

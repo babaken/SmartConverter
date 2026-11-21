@@ -89,6 +89,8 @@ fn main() -> eframe::Result {
     #[allow(unused_mut)]
     let mut options = eframe::NativeOptions {
         viewport,
+        // 足りない文字は src/fonts.rs（OsFallback）が OS のフォントから探す。
+        system_font_fallback: false,
         ..Default::default()
     };
     // Linux：Wayland のセッションでもネイティブの Wayland で開くのが既定。
@@ -109,7 +111,21 @@ fn main() -> eframe::Result {
     );
     match &result {
         Ok(()) => diag::op("終了"),
-        Err(e) => diag::op(format!("終了（エラー：{e}）")),
+        Err(e) => {
+            diag::op(format!("終了（エラー：{e}）"));
+            // 描画は OpenGL 2.0 以降を使う。GPU のドライバが無い環境（仮想マシンやリモートデスクトップなど）
+            // では起動できないので、何も出ずに終わらないよう理由を知らせる。
+            rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title(sc_core::APP_NAME)
+                .set_description(format!(
+                    "画面を開けませんでした。\n\n{e}\n\n\
+                     SmartConverter の画面の表示には OpenGL 2.0 以降が必要です。\
+                     GPU のドライバが入っているか確かめてください。\n\
+                     画面を使わずに変換するときは smartconverter-cli を使えます。"
+                ))
+                .show();
+        }
     }
     result
 }

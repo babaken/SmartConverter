@@ -15,6 +15,7 @@ pub mod progress;
 pub mod runner;
 pub mod script;
 pub mod settings;
+mod sjis;
 pub mod text;
 pub mod vars;
 

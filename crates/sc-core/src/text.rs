@@ -70,9 +70,8 @@ pub fn strip_ansi(s: &str) -> String {
 }
 
 fn decode_cp932(bytes: &[u8]) -> String {
-    // encoding_rs の SHIFT_JIS は WHATWG の定義で、CP932（Windows-31J）の拡張文字も含む。
-    let (text, _had_errors) = encoding_rs::SHIFT_JIS.decode_without_bom_handling(bytes);
-    text.into_owned()
+    // WHATWG の Shift_JIS の定義で、CP932（Windows-31J）の拡張文字も含む。
+    crate::sjis::decode(bytes)
 }
 
 #[cfg(test)]

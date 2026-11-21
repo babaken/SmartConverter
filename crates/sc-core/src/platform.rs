@@ -30,6 +30,40 @@ pub fn registry_string(subkey: &str, value: &str) -> Option<String> {
     imp::registry_string(subkey, value)
 }
 
+/// レジストリの複数行の文字列（REG_MULTI_SZ）の値を読む（Windows のみ。HKEY_LOCAL_MACHINE だけを見る）。
+/// 読めなければ空。ほかの OS では常に空。
+pub fn registry_multi_string(subkey: &str, value: &str) -> Vec<String> {
+    imp::registry_multi_string(subkey, value)
+}
+
+/// 標準エラー出力の端末の幅（文字数）。端末でなければ `None`。
+pub fn stderr_terminal_width() -> Option<usize> {
+    imp::stderr_terminal_width().filter(|&w| w > 0)
+}
+
+/// 標準エラー出力で、色やカーソル移動の制御文字（ANSI エスケープシーケンス）を使えるようにする。
+/// Windows では端末の設定を変える（Windows 10 以降の端末が対応）。使えるなら true。
+pub fn enable_ansi_stderr() -> bool {
+    imp::enable_ansi_stderr()
+}
+
+/// ファイルを読み取り専用でメモリに対応させる（メモリマップ）。プログラムが終わるまで解放しない。
+///
+/// ファイル全体を読み込むのと違い、実際に使ったところだけがメモリに載り、ほかのプロセスとも共有される。
+/// 大きなフォントファイルを読むのに使う。途中でファイルが書き換えられることのないもの（OS のフォントなど）にだけ使う。
+/// 空のファイルや開けないファイルは `None`。
+pub fn map_file_static(path: &std::path::Path) -> Option<&'static [u8]> {
+    let file = std::fs::File::open(path).ok()?;
+    let len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    if len == 0 {
+        return None;
+    }
+    let ptr = imp::map_file(&file, len)?;
+    // SAFETY: ptr は len バイトの読み取り専用の割り当てで、解放しないのでずっと有効。
+    // ファイルは書き換えられない前提（関数の説明のとおり）。
+    Some(unsafe { std::slice::from_raw_parts(ptr, len) })
+}
+
 /// 起動した子プロセス（とその子孫）をまとめて管理する。
 pub struct ProcessTree {
     inner: imp::Tree,
@@ -109,6 +143,98 @@ mod imp {
             }
         }
         None
+    }
+
+    pub fn registry_multi_string(subkey: &str, value: &str) -> Vec<String> {
+        use windows_sys::Win32::System::Registry::{
+            RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_MULTI_SZ,
+        };
+        let wide = |s: &str| s.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
+        let (subkey, value) = (wide(subkey), wide(value));
+        let get = |buf: *mut u16, bytes: &mut u32| {
+            // SAFETY: 文字列は NUL 終端。buf が null なら必要な大きさだけを bytes に返す。
+            unsafe {
+                RegGetValueW(
+                    HKEY_LOCAL_MACHINE,
+                    subkey.as_ptr(),
+                    value.as_ptr(),
+                    RRF_RT_REG_MULTI_SZ,
+                    std::ptr::null_mut(),
+                    buf.cast(),
+                    bytes,
+                )
+            }
+        };
+        let mut bytes = 0u32;
+        if get(std::ptr::null_mut(), &mut bytes) != 0 || bytes == 0 {
+            return Vec::new();
+        }
+        let mut buf = vec![0u16; bytes as usize / 2 + 1];
+        bytes = (buf.len() * 2) as u32;
+        if get(buf.as_mut_ptr(), &mut bytes) != 0 {
+            return Vec::new();
+        }
+        let len = (bytes as usize / 2).min(buf.len());
+        buf[..len]
+            .split(|&c| c == 0)
+            .filter(|s| !s.is_empty())
+            .map(String::from_utf16_lossy)
+            .collect()
+    }
+
+    pub fn stderr_terminal_width() -> Option<usize> {
+        use windows_sys::Win32::System::Console::{
+            GetConsoleScreenBufferInfo, GetStdHandle, CONSOLE_SCREEN_BUFFER_INFO, STD_ERROR_HANDLE,
+        };
+        // SAFETY: GetStdHandle は失敗しても無効なハンドルを返すだけで、そのときは次の呼び出しが失敗する。
+        unsafe {
+            let mut info: CONSOLE_SCREEN_BUFFER_INFO = std::mem::zeroed();
+            if GetConsoleScreenBufferInfo(GetStdHandle(STD_ERROR_HANDLE), &mut info) == 0 {
+                return None;
+            }
+            usize::try_from(i32::from(info.srWindow.Right) - i32::from(info.srWindow.Left) + 1).ok()
+        }
+    }
+
+    pub fn enable_ansi_stderr() -> bool {
+        use windows_sys::Win32::System::Console::{
+            GetConsoleMode, GetStdHandle, SetConsoleMode, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+            STD_ERROR_HANDLE,
+        };
+        // SAFETY: 端末でなければ GetConsoleMode が失敗するので、何も変えない。
+        unsafe {
+            let h = GetStdHandle(STD_ERROR_HANDLE);
+            let mut mode = 0;
+            if GetConsoleMode(h, &mut mode) == 0 {
+                return false;
+            }
+            mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0
+                || SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+        }
+    }
+
+    pub fn map_file(file: &std::fs::File, _len: usize) -> Option<*const u8> {
+        use windows_sys::Win32::System::Memory::{
+            CreateFileMappingW, MapViewOfFile, FILE_MAP_READ, PAGE_READONLY,
+        };
+        // SAFETY: ハンドルは開いているファイルのもの。割り当てを作ったあとはハンドルを閉じてよい
+        // （割り当ては UnmapViewOfFile するまで残る。ここでは解放しない）。
+        unsafe {
+            let mapping = CreateFileMappingW(
+                file.as_raw_handle() as HANDLE,
+                std::ptr::null(),
+                PAGE_READONLY,
+                0,
+                0,
+                std::ptr::null(),
+            );
+            if mapping.is_null() {
+                return None;
+            }
+            let view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
+            CloseHandle(mapping);
+            (!view.Value.is_null()).then_some(view.Value as *const u8)
+        }
     }
 
     /// GetExitCodeProcess が返す「まだ動いている」（STILL_ACTIVE）。
@@ -268,6 +394,40 @@ mod imp {
         None
     }
 
+    pub fn registry_multi_string(_subkey: &str, _value: &str) -> Vec<String> {
+        Vec::new()
+    }
+
+    pub fn stderr_terminal_width() -> Option<usize> {
+        // SAFETY: winsize を渡して端末の大きさを受け取るだけ。端末でなければ失敗する。
+        unsafe {
+            let mut ws: libc::winsize = std::mem::zeroed();
+            (libc::ioctl(libc::STDERR_FILENO, libc::TIOCGWINSZ, &mut ws) == 0)
+                .then_some(usize::from(ws.ws_col))
+        }
+    }
+
+    pub fn enable_ansi_stderr() -> bool {
+        true
+    }
+
+    pub fn map_file(file: &std::fs::File, len: usize) -> Option<*const u8> {
+        use std::os::fd::AsRawFd;
+        // SAFETY: 開いているファイルを読み取り専用で割り当てる。ファイルを閉じても割り当ては残る
+        // （munmap するまで。ここでは解放しない）。
+        let ptr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                len,
+                libc::PROT_READ,
+                libc::MAP_PRIVATE,
+                file.as_raw_fd(),
+                0,
+            )
+        };
+        (ptr != libc::MAP_FAILED).then_some(ptr as *const u8)
+    }
+
     pub fn process_exists(pid: u32) -> bool {
         let Ok(pid) = libc::pid_t::try_from(pid) else {
             return false;
@@ -356,6 +516,22 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_file_contents() {
+        // 割り当てたファイルは（Windows では）消せないので、今動いているテストの実行ファイルを使う。
+        let exe = std::env::current_exe().unwrap();
+        let mapped = map_file_static(&exe).unwrap();
+        assert_eq!(mapped, std::fs::read(&exe).unwrap().as_slice());
+
+        let dir = std::env::temp_dir().join(format!("sc-map-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let empty = dir.join("empty.bin");
+        std::fs::write(&empty, b"").unwrap();
+        assert_eq!(map_file_static(&empty), None);
+        assert_eq!(map_file_static(&dir.join("none.bin")), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn process_existence() {

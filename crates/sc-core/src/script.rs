@@ -294,12 +294,12 @@ fn unsafe_value(template: &str, vars: &Vars) -> Option<&'static str> {
 /// - それ以外（`.vpy` と Linux の `.avs`）：UTF-8（BOM なし）。
 fn encode_script(text: &str, kind: ScriptKind) -> (Vec<u8>, Option<String>) {
     if cfg!(windows) && kind == ScriptKind::AviSynth {
-        let (bytes, _, lossy) = encoding_rs::SHIFT_JIS.encode(text);
+        let (bytes, lossy) = crate::sjis::encode(text);
         let warn = lossy.then(|| {
             "Shift-JIS で表せない文字があるため、スクリプト内のパスが正しく読めない可能性があります"
                 .to_owned()
         });
-        return (bytes.into_owned(), warn);
+        return (bytes, warn);
     }
     (text.as_bytes().to_vec(), None)
 }

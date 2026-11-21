@@ -19,6 +19,8 @@ Windows と Linux で動きます。
 | Windows | Windows 10 / 11（x64） |
 | Linux | x86_64。glibc 2.39 以降（Ubuntu 24.04 でビルド）。X11 と Wayland のどちらでも動きます |
 
+画面の表示には OpenGL 2.0 以降が必要です（GPU のドライバが入っていれば使えます。ドライバの無い仮想マシンなどでは、CLI 版を使ってください）。
+
 日本語の表示には、OS の日本語フォントを使います（Windows：游ゴシック・メイリオなど、Linux：Noto Sans CJK など）。
 
 ## 入れ方

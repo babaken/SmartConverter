@@ -16,6 +16,7 @@ use sc_core::script::ScriptSupport;
 use sc_core::settings::{self, Settings};
 use sc_core::{paths, vars};
 
+mod bars;
 mod convert;
 use convert::{EXIT_ABORTED, EXIT_OK};
 

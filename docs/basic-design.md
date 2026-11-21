@@ -43,8 +43,7 @@ SmartConverter/
 ├─ assets/
 │  ├─ icon/                   … アイコン（SVG 原本、生成した ICO/PNG）
 │  ├─ linux/                  … .desktop と、~/.local に入れるスクリプト（install-local.sh）
-│  ├─ windows/                … マニフェスト
-│  └─ fonts/                  … 予備の日本語フォント（§9.3）
+│  └─ windows/                … マニフェスト
 ├─ presets/                   … 同梱のプリセット例（両 OS 共通）
 ├─ templates/                 … 同梱のスケルトン例（default.avs / default.vpy）
 ├─ docs/
@@ -101,7 +100,7 @@ smartconverter-cli --list-presets
 ```
 
 - 優先順位：コマンドラインの指定 → `SmartConverter.ini`（`--config` または既定の場所）→ 既定値。CLI は GUI と同じ `SmartConverter.ini` を読むので、`-o` などを省略すると GUI で設定した値（出力先フォルダ・優先度・同名ファイルの扱いなど）がそのまま使われる。
-- 進捗表示：標準エラー出力にプログレスバーを 2 段で表示する（`indicatif` の `MultiProgress`）。
+- 進捗表示：標準エラー出力にプログレスバーを 2 段で表示する（自前の実装 `sc-cli/src/bars.rs`。カーソルを上げて描き直す。依存を減らすため `indicatif` は使わない）。
 
   ```
   全体 [1/3] ████████░░░░░░░░░░░░░░░░  33%  経過 00:12:40
@@ -482,7 +481,13 @@ PresetWindow=
 ### 9.3 日本語フォント
 
 1. 起動時に OS の日本語フォントを読み込む（Windows：Yu Gothic UI → Meiryo UI → MS UI Gothic、Linux：fontconfig で `sans-serif:lang=ja` を照会）
-2. 見つからなければ、同梱の Noto Sans JP（SIL OFL）を使う
+2. 日本語フォントに無い文字（ハングル・簡体字・タイ文字など）は、egui の `FontProvider` として自前で実装した `OsFallback`（`sc-gui/src/fonts.rs`）が、その文字が出たときに OS のフォントから探す。
+   - Windows：レジストリ `FontLink\SystemLink` の、読み込んだ日本語フォントの代わりのフォントの一覧の順に探す（一覧は OS の言語ごとに違う）。
+   - Linux：`fc-match "sans-serif:charset=<文字>"` で探す。
+   - フォントに文字があるかは、フォントの cmap（format 4 / 12）だけを読んで確かめる。
+   - eframe の `system_fonts`（fontique など依存が多い）は使わない。
+3. フォントファイルは丸ごと読まずにメモリマップする（`sc_core::platform::map_file_static`）。実際に使う字形のところだけがメモリに載る。
+4. フォントは実行ファイルに入れない（egui の既定の欧文・記号フォントだけが入る）。
 
 ### 9.4 ドラッグ＆ドロップ
 
@@ -515,18 +520,24 @@ PresetWindow=
 |---|---|
 | GUI | `eframe` / `egui`、`egui_extras`（表） |
 | ファイル選択ダイアログ | `rfd` |
-| 文字コード | `encoding_rs` |
+| 文字コード | 自前（`sc-core/src/sjis.rs`。CP932 の表はビルド時に `encoding_rs` から作る。`encoding_rs` は実行ファイルに入らない） |
 | 引数分割（Linux） | `shell-words` |
 | ファイル監視 | 2 秒ごとに更新日時を確かめる（`notify` は使わない。ネットワークドライブやエディタの保存方法の違いに左右されないため） |
 | スレッド間通信 | `crossbeam-channel` |
 | 日時 | `chrono` |
-| 正規表現（進捗解析） | `regex` |
-| CLI 引数 / プログレスバー | `clap` / `indicatif` |
+| 正規表現（進捗解析） | `regex-lite`（`regex` より約 1 MB 小さい） |
+| CLI 引数 / プログレスバー | `clap`（色・入力ミスの候補は使わない） / 自前（`sc-cli/src/bars.rs`） |
 | トレイ / 通知 | `tray-icon`（Windows）・`ksni`（Linux） / `notify-rust` |
 | OS API | `windows-sys`（Windows）、`nix`（Linux） |
 | エラー / ログ | `thiserror`、`anyhow`、`tracing` |
 
 ## 12. ビルド・配布
+
+- 描画は OpenGL（eframe の `glow`）。既定の `wgpu` は起動時に DX12・Vulkan・GL のドライバを GPU ごとに読み込み、メモリ（Windows で約 470 MB）と実行ファイルが大きくなるため使わない。
+  OpenGL 2.0 以降が無い環境では GUI は起動できない（理由をメッセージで出し、CLI 版を案内する）。
+- eframe の `accesskit`（画面の読み上げ）・`links`・`system_fonts` は使わない。
+- リリースビルドは `opt-level = "s"`、`lto = "fat"`（実行ファイルを小さくする）。`panic = "abort"` にはしない（Runner のパニックを `catch_unwind` で受け止めるため）。
+- Windows は C ランタイムを埋め込む（`.cargo/config.toml` の `+crt-static`）。Visual C++ 再頒布可能パッケージが無い PC でも起動できるようにするため。
 
 | 対象 | 成果物 |
 |---|---|

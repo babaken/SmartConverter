@@ -4,13 +4,17 @@ members = ["crates/sc-core", "crates/sc-gui", "crates/sc-cli", "xtask"]
 default-members = ["crates/sc-core", "crates/sc-gui", "crates/sc-cli"]
 
 [workspace.package]
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [profile.release]
-lto = "thin"
+# 実行ファイルを小さくする（重い処理は外部エンコーダが行うので、速さより大きさを優先する）。
+# "z" は "s" とほとんど大きさが変わらず遅くなるので使わない。
+opt-level = "s"
+lto = "fat"
 codegen-units = 1
 strip = true
+# panic = "abort" にはしない（ワーカーが catch_unwind でジョブのパニックを受け止めているため）

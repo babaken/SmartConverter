@@ -1842,7 +1842,7 @@ impl eframe::App for App {
 
     /// 終わるときに 1 回呼ばれる。画面が一度も描かれないまま終わる（Wayland で画面のロック中に
     /// 閉じられたなど、logic も呼ばれない）と、閉じる要求を処理しないので、ここで保存する。
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if self.saved_on_close && !self.settings_dirty {
             return;
         }

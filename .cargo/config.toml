@@ -1,2 +1,7 @@
 [alias]
 xtask = "run --package xtask --"
+
+# Windows：C ランタイム（vcruntime140.dll）を実行ファイルに埋め込む。
+# 埋め込まないと、Visual C++ 再頒布可能パッケージが入っていない PC で起動できない。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
